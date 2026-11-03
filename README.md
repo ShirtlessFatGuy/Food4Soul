@@ -14,6 +14,7 @@ Reseller users.
 2. Open phpMyAdmin → **Import** → choose `database/food4soul_schema.sql` → **Go**.
    This creates the `food4soul` database, all ERD tables, sample products,
    suppliers, orders, 14 days of sample sales, and the initial low-stock alerts.
+   Already imported an older copy? Import `database/migration_payments.sql` once to add the QR payments table.
 3. If your MySQL login is not `root` with an empty password, edit `config/db.php`.
 
 ## 3. Set real passwords for the demo accounts
@@ -49,6 +50,20 @@ Copy the *contents* of this folder directly into `htdocs/` (not into a sub-folde
 or create an Apache VirtualHost whose DocumentRoot is this folder. Then open
 <http://localhost/login.php>.
 
+## 4b. QR payments (reseller checkout)
+Choosing **QR payment** at checkout does not record the sale yet. It creates a *Pending* payment
+(`payments` table) and opens `reseller/pay.php`, which shows a QR code, the amount, a 15-minute
+countdown and polls for confirmation every 3 s. The sale is recorded and stock deducted only when
+the payment becomes *Paid*; expired, cancelled and failed payments never touch stock.
+
+Settings are in `config/payment.php`:
+- `mode = 'demo'` (default): the pay page has a **Simulate payment** button standing in for the bank. No real money moves.
+- `mode = 'live'`: no button. A gateway (PayMongo, Xendit, ...) must call `api/payment_webhook.php`
+  with header `X-Signature: HMAC-SHA256(body, webhook_secret)` and body
+  `{"reference":"F4S-...","status":"paid","provider_ref":"..."}`. Change `webhook_secret` first.
+  To go live you also need a gateway account, a publicly reachable HTTPS URL for the webhook, and
+  code that asks the gateway for its QR string and saves it in `payments.QR_Payload`.
+
 ## 5. Role routing and security (answers for the defense panel)
 - Each role is redirected to its own portal after login; every protected page calls
   `require_role()` in `includes/auth.php`, so access is enforced **server-side**,
@@ -74,6 +89,7 @@ or create an Apache VirtualHost whose DocumentRoot is this folder. Then open
 | REQ-007, REQ-010 | bcrypt hashing; foreign keys in the schema |
 
 ## 7. Known gaps (be upfront about these)
+- **Not implemented:** real e-bank / e-wallet gateway (QR checkout runs in demo mode, see section 4b).
 - **Not implemented:** two-step verification and automated scheduled/e-mailed weekly
   reports (mentioned in Chapter 1). Reports are generated on demand.
 - **Not implemented:** admin screens to create users, products, suppliers or restock
@@ -82,6 +98,6 @@ or create an Apache VirtualHost whose DocumentRoot is this folder. Then open
   Objectives section also lists an AI/LLM feedback summarizer and a customer-feedback
   mechanism. Neither is built, and the paper contradicts itself here, so settle it
   with your adviser before the defense.
-- Alerts are never marked "Read" in the UI yet.
+- Alerts are in-app only (no e-mail/SMS), and there are no alerts yet for delivery status changes or system errors.
 - This has **not been run against a live PHP/MySQL stack in the authoring
   environment** (no PHP available there), so do a full click-through on XAMPP first.
